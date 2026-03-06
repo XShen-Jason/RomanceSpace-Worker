@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设计 - 子域名小项目平台指南</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            line-height: 1.7;
+            color: #334155;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            padding: 40px;
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #0f172a;
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-weight: 700;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h2 {
+            font-size: 24px;
+            color: #1e293b;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            color: #334155;
+            margin-top: 24px;
+            font-weight: 600;
+        }
+
+        p {
+            margin: 16px 0;
+            font-size: 16px;
+        }
+
+        ul,
+        ol {
+            padding-left: 24px;
+            margin: 16px 0;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        li>ul,
+        li>ol {
+            margin: 4px 0;
+            color: #475569;
+        }
+
+        blockquote {
+            background-color: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            margin: 24px 0;
+            padding: 16px 20px;
+            border-radius: 0 8px 8px 0;
+            color: #166534;
+            font-weight: 500;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 24px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        th,
+        td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: #f1f5f9;
+        }
+
+        code {
+            background-color: #f1f5f9;
+            color: #ec4899;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 30px 0;
+            border: 1px solid #bfdbfe;
+        }
+
+        .highlight-box ul {
+            margin: 10px 0 0 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>💡 子域名小项目平台指南</h1>
+
+        <h2>1️⃣ 架构总览</h2>
+        <p>平台整体采用 <strong>边缘 + 中心服务器</strong> 架构：</p>
+        <ul>
+            <li><strong>Cloudflare</strong>（DNS + Worker + KV + Cache）
+                <ul>
+                    <li>处理用户访问请求</li>
+                    <li>解析子域名</li>
+                    <li>分发请求到对应小项目模块</li>
+                    <li>缓存热门页面，加速响应</li>
+                </ul>
+            </li>
+            <li><strong>中心服务器</strong>（香港节点推荐）
+                <ul>
+                    <li>用户注册、登录</li>
+                    <li>用户项目创建与管理</li>
+                    <li>数据持久化（数据库）</li>
+                    <li>同步子域名映射到 CF KV</li>
+                    <li>后台管理与统计</li>
+                </ul>
+            </li>
+        </ul>
+        <blockquote>原则：读操作在边缘完成，写操作在服务器完成。</blockquote>
+
+        <h2>2️⃣ 服务器端职责</h2>
+        <ul>
+            <li><strong>用户系统</strong>
+                <ul>
+                    <li>注册、登录、权限管理</li>
+                    <li>用户信息存储</li>
+                </ul>
+            </li>
+            <li><strong>小项目管理</strong>
+                <ul>
+                    <li>用户选择或创建小项目</li>
+                    <li>保存用户选择的项目类型与配置</li>
+                </ul>
+            </li>
+            <li><strong>域名管理</strong>
+                <ul>
+                    <li>子域名领取校验（检查是否已被占用）</li>
+                    <li>保存 subdomain → 项目映射表到数据库</li>
+                </ul>
+            </li>
+            <li><strong>同步 KV</strong>
+                <ul>
+                    <li>当用户创建/修改小项目时，调用 Cloudflare API 将最新映射写入 KV</li>
+                </ul>
+            </li>
+            <li><strong>后台管理</strong>
+                <ul>
+                    <li>查看所有用户项目</li>
+                    <li>统计访问量、热门项目</li>
+                    <li>可手动干预或修复 KV 映射</li>
+                </ul>
+            </li>
+        </ul>
+        <blockquote><strong>关键点：</strong> 服务器不直接响应用户访问请求，只处理写操作。KV 是 Worker 访问的“配置中心”，服务器负责保持其最新状态。</blockquote>
+
+        <h2>3️⃣ Cloudflare 端职责</h2>
+        <ul>
+            <li><strong>DNS</strong>
+                <ul>
+                    <li>设置 <code>*.example.com</code> 通配符解析到 Worker</li>
+                    <li>用户访问的子域名无需单独添加记录</li>
+                </ul>
+            </li>
+            <li><strong>Worker</strong>
+                <ul>
+                    <li>拦截所有子域名请求</li>
+                    <li>解析 Host 获取子域名</li>
+                    <li>访问 KV 获取当前子域名对应的小项目类型和配置</li>
+                    <li>调用相应小项目模块生成页面</li>
+                </ul>
+            </li>
+            <li><strong>KV</strong>
+                <ul>
+                    <li>保存每个子域名的映射：<code>subdomain → { projectType, configId }</code></li>
+                    <li>Worker 读取 KV 生成页面</li>
+                </ul>
+            </li>
+            <li><strong>Edge Cache</strong>
+                <ul>
+                    <li>热门页面缓存，加速用户访问</li>
+                    <li>大幅减少 KV 和 Worker 执行次数</li>
+                </ul>
+            </li>
+        </ul>
+        <blockquote>原则：边缘只做读操作、渲染页面和缓存，保证访问速度快、压力低。</blockquote>
+
+        <h2>4️⃣ 服务器与 CF 的通信</h2>
+        <ol>
+            <li>用户在平台创建或修改项目</li>
+            <li>服务器写数据库并校验合法性</li>
+            <li>服务器调用 Cloudflare KV API，将映射写入 KV</li>
+            <li>Worker 读取 KV 渲染页面</li>
+            <li>用户访问子域名即可获取最新页面</li>
+        </ol>
+        <blockquote>核心逻辑：<strong>服务器写，Worker 读</strong>，服务器不参与每次访问。</blockquote>
+
+        <h2>5️⃣ 用户访问流程（技术视角）</h2>
+        <ol>
+            <li><strong>DNS 层</strong>
+                <ul>
+                    <li><code>user.example.com</code> 匹配通配符 <code>*.example.com</code></li>
+                    <li>访问路由到 Worker</li>
+                </ul>
+            </li>
+            <li><strong>Worker 层</strong>
+                <ul>
+                    <li>拦截请求</li>
+                    <li><code>Host = user.example.com</code> → 提取 <code>subdomain = user</code></li>
+                    <li>查询 KV：<code>KV.get("user") → { projectType: "abc", configId: 123 }</code></li>
+                    <li>调用对应模块 <code>renderABC(123)</code> 生成 HTML/JS 页面</li>
+                </ul>
+            </li>
+            <li><strong>Edge Cache</strong>
+                <ul>
+                    <li>若缓存存在直接返回缓存页面</li>
+                    <li>否则生成页面并缓存</li>
+                </ul>
+            </li>
+            <li><strong>用户浏览器</strong>
+                <ul>
+                    <li>显示小项目页面</li>
+                    <li>页面内可触发 API 调用（例如点赞、留言），这些 API 也由服务器处理</li>
+                </ul>
+            </li>
+            <li><strong>用户切换项目</strong>
+                <ul>
+                    <li>平台操作更新数据库 + KV</li>
+                    <li>下次访问 <code>user.example.com</code> 自动显示新项目，无需 DNS 或 Worker 改动</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>6️⃣ 为什么这么做</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>问题</th>
+                    <th>解决方案</th>
+                    <th>原因</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>大量用户访问</td>
+                    <td>Worker + KV + Cache</td>
+                    <td>边缘处理，秒开页面，减轻服务器压力</td>
+                </tr>
+                <tr>
+                    <td>用户切换项目</td>
+                    <td>KV 存映射，Worker 动态调用</td>
+                    <td>不改 DNS，不改 Worker，不重部署</td>
+                </tr>
+                <tr>
+                    <td>子域名爆炸</td>
+                    <td>通配符 DNS</td>
+                    <td>不用为每个用户单独解析</td>
+                </tr>
+                <tr>
+                    <td>管理复杂</td>
+                    <td>服务器集中管理写操作</td>
+                    <td>统一数据库，易扩展、易维护</td>
+                </tr>
+                <tr>
+                    <td>高性能</td>
+                    <td>缓存 + KV</td>
+                    <td>读操作在边缘完成，延迟低</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="highlight-box">
+            <h3 style="margin-top: 0;">7️⃣ 技术亮点总结</h3>
+            <ul>
+                <li><strong>单 Worker 支撑所有小项目</strong>：模块按需调用、KV存储映射、Cache加速。</li>
+                <li><strong>服务器只写不读</strong>：高并发访问不会打到数据库。</li>
+                <li><strong>通配符 DNS + KV 映射</strong>：子域名动态绑定，即时生效。</li>
+                <li><strong>可扩展性强</strong>：边缘架构支撑数万子域名毫无压力。</li>
+            </ul>
+        </div>
+
+        <h2>✅ 总结</h2>
+        <ul>
+            <li><strong>服务器</strong>：用户管理 + 项目管理 + 数据持久化 + KV 同步</li>
+            <li><strong>Cloudflare</strong>：边缘请求处理 + 子域名解析 + 小项目渲染 + 缓存</li>
+            <li><strong>连接方式</strong>：服务器写 KV → Worker 读 KV → Edge Cache 返回页面</li>
+        </ul>
+    </div>
+</body>
+
+</html>

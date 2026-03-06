@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>表白小项目平台 — 技术架构说明</title>
+
+<style>
+body {
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    max-width:900px;
+    margin:auto;
+    padding:40px;
+    line-height:1.7;
+    color:#1f2937;
+    background:#fff;
+}
+
+h1 {
+    margin-top:0;
+    border-bottom:2px solid #eee;
+    padding-bottom:10px;
+}
+
+h2 {
+    margin-top:40px;
+}
+
+h3 {
+    margin-top:30px;
+}
+
+p {
+    margin:10px 0;
+}
+
+ul {
+    padding-left:20px;
+}
+
+li {
+    margin:6px 0;
+}
+
+pre {
+    background:#f4f4f4;
+    padding:15px;
+    border-radius:6px;
+    overflow:auto;
+}
+
+code {
+    font-family:monospace;
+}
+
+blockquote {
+    background:#f8fafc;
+    border-left:4px solid #2563eb;
+    padding:10px 15px;
+    margin:12px 0;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>表白小项目平台 — 技术架构与功能说明</h1>
+
+<h2>一、项目目标</h2>
+<p>建立一个可分享、可定制的小项目平台，核心功能包括：</p>
+
+<pre>
+- 用户可领取专属三级域名，例如 user.example.com
+- 用户可绑定现有模板的小项目（表白页面、倒计时、小游戏等）
+- 用户可免费更换小项目模板或在模板允许范围内定制内容
+- 平台可支持付费深度定制模板
+- 高访问量下仍保持快速响应与稳定性
+</pre>
+
+<h2>二、整体架构</h2>
+<p>平台采用 <strong>Cloudflare + 自建服务器</strong> 双层架构：</p>
+
+<pre>
+用户浏览器
+│
+▼
+Cloudflare DNS
+│
+▼
+Cloudflare Worker（边缘）
+│  ├─ KV：存储子域名 → 模板映射
+│  ├─ R2/CDN：存储图片、SVG、音频等资源
+│  └─ 调用模板模块生成页面
+│
+▼
+浏览器显示页面并执行前端互动 JS
+│
+▼
+服务器 API（记录互动数据）
+│
+▼
+数据库（用户信息、配置、互动记录）
+</pre>
+
+<p><strong>核心原则：</strong></p>
+
+<pre>
+- 访问快：用户访问走 Worker + KV + CDN
+- 管理灵活：服务器处理注册、模板配置、用户数据、互动 API
+- 高并发：Worker 天生支持水平扩展，热点页面可缓存
+- 成本低：无需每个用户单独生成页面
+</pre>
+
+<h2>三、Cloudflare 部分职责</h2>
+
+<h3>1. DNS</h3>
+<ul>
+<li>通配符解析 *.example.com</li>
+<li>支持用户动态领取三级域名，无需单独添加 DNS</li>
+</ul>
+
+<h3>2. Worker</h3>
+<p>核心任务：<strong>渲染小项目页面</strong></p>
+
+<pre>
+1. 获取访问子域名（subdomain）
+2. KV 查询 subdomain 对应模板
+3. 读取模板模块
+4. 获取用户配置（KV 缓存 / 服务器 API）
+5. render(config) → HTML
+6. 返回给用户浏览器
+</pre>
+
+<p>优化点：</p>
+<ul>
+<li>热门页面缓存到 Edge Cache</li>
+<li>模板模块动态 import，减少冷启动</li>
+</ul>
+
+<h3>3. KV（Key-Value）</h3>
+<ul>
+<li>存储子域名与模板映射，例如：
+<pre>{
+  "xiaoming": "confession",
+  "user2": "countdown"
+}</pre>
+</li>
+<li>支持读多写少的高并发访问</li>
+<li>可缓存完整用户配置，减少服务器调用</li>
+</ul>
+
+<h3>4. R2 / CDN</h3>
+<ul>
+<li>存储静态资源：图片、SVG、背景图、音乐等</li>
+<li>页面直接引用资源 URL，不增加 Worker 体积</li>
+<li>全球加速，响应快</li>
+</ul>
+
+<h2>四、服务器部分职责</h2>
+
+<h3>1. 用户系统</h3>
+<ul>
+<li>注册 / 登录</li>
+<li>用户信息管理</li>
+<li>子域名领取</li>
+</ul>
+
+<h3>2. 域名绑定 & 小项目配置</h3>
+<ul>
+<li>用户领取三级域名：user.example.com</li>
+<li>绑定模板和用户配置：
+<pre>
+- 配置 JSON 记录可定制字段（文本、背景、音乐等）
+- 保存到数据库
+- 更新 KV
+</pre>
+</li>
+</ul>
+
+<h3>3. 模板定制功能</h3>
+<ul>
+<li>免费模板定制：用户可修改预定义字段</li>
+<li>付费深度定制：用户提交需求，平台制作新模板并绑定</li>
+</ul>
+
+<h3>4. 互动 API</h3>
+<ul>
+<li>点赞、留言、点击统计等功能</li>
+<li>Worker 页面前端 JS 调用服务器 API 记录数据</li>
+<li>数据存储在数据库中</li>
+</ul>
+
+<h2>五、模板与配置设计</h2>
+
+<h3>1. 模板目录结构</h3>
+<pre>
+worker/
+│
+├─ templates/
+│   ├─ confession/
+│   │   ├─ render.js
+│   │   └─ schema.json
+│   ├─ countdown/
+│   │   ├─ render.js
+│   │   └─ schema.json
+│   └─ love-game/
+│       ├─ render.js
+│       └─ schema.json
+</pre>
+
+<h3>2. 模板模块示例</h3>
+<pre>
+// render.js
+export function render(config) {
+  return `
+    <html>
+      <body>
+        <h1>${config.message}</h1>
+        <p>${config.name}</p>
+        <script src="/js/interaction.js"></script>
+      </body>
+    </html>
+  `
+}
+</pre>
+
+<h3>3. schema.json 示例</h3>
+<pre>
+{
+  "fields": [
+    { "name": "message", "type": "text" },
+    { "name": "bg", "type": "image" },
+    { "name": "music", "type": "audio" }
+  ]
+}
+</pre>
+
+<h2>六、用户使用流程（完整）</h2>
+<pre>
+1. 注册账号
+2. 领取三级域名：user.example.com
+3. 选择模板小项目
+4. 填写配置（可定制文本、图片、音乐等）
+5. 分享链接
+6. 朋友访问页面：
+   Worker 获取域名 → KV 查询模板 → 读取配置 → render → 返回页面
+7. 互动操作（点赞、留言）：
+   前端 JS 调用 API，服务器记录数据
+8. 用户更换模板或配置：
+   更新数据库 → 更新 KV → Worker 下次访问自动生效
+</pre>
+
+<h2>七、优化与扩展策略</h2>
+
+<h3>1. Worker 模块化</h3>
+<ul>
+<li>每个模板一个模块</li>
+<li>动态 import 减少冷启动</li>
+<li>单 Worker 放 30–60 个中等复杂项目可稳健运行</li>
+<li>超过 100 个项目 → 使用 Gateway Worker 拆分子 Worker</li>
+</ul>
+
+<h3>2. 缓存策略</h3>
+<ul>
+<li>热门页面缓存到 Edge Cache</li>
+<li>KV 缓存用户配置，减少服务器访问</li>
+<li>静态资源走 CDN / R2</li>
+</ul>
+
+<h3>3. 模板升级与深度定制</h3>
+<ul>
+<li>普通模板修改字段 → 免费</li>
+<li>模板功能扩展 → 平台制作</li>
+<li>深度定制 → 新模板，付费</li>
+</ul>
+
+<h3>4. 互动与性能</h3>
+<ul>
+<li>Worker 渲染页面 → KV / R2</li>
+<li>互动 API → 服务器</li>
+<li>避免 Worker 内直接处理大量逻辑或数据库操作</li>
+</ul>
+
+<h2>八、总结</h2>
+<pre>
+- 访问快：Cloudflare Worker + KV + CDN
+- 管理灵活：服务器处理用户注册、模板配置和互动 API
+- 成本低：模板 + 配置方式，避免为每个用户生成静态页面
+- 可扩展：模块化模板设计，支持免费与付费定制
+- 高并发：Worker 天生水平扩展，Edge Cache 缓存加速
+</pre>
+
+<blockquote>
+核心理念：模板通用 + 配置可定制 + Worker 渲染 + 服务器管理  
+确保平台从几十用户到数十万用户都可平稳运行
+</blockquote>
+
+</body>
+</html>

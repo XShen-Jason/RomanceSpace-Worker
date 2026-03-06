@@ -1,0 +1,15 @@
+name = "romancespace-worker"
+main = "src/index.js"
+compatibility_date = "2024-03-05"
+
+# [vars]
+# API_SECRET = "your-secret"
+
+# [[kv_namespaces]]
+# binding = "PROJECT_ROUTES"
+# id = "your-kv-namespace-id"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "romancespace-db"
+# database_id = "your-d1-id"
