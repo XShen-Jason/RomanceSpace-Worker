@@ -1,0 +1,14 @@
+{
+  "name": "romancespace-worker",
+  "version": "2.0.0",
+  "description": "Cloudflare Worker for RomanceSpace — R2 template engine",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "upload": "node scripts/upload-template.js"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

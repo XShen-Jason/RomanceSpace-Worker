@@ -1,0 +1,23 @@
+name = "romancespace"
+main = "src/index.js"
+compatibility_date = "2024-03-05"
+
+
+routes = [
+  { pattern = "romancespace.885201314.xyz", custom_domain = true },
+  { pattern = "*.885201314.xyz", zone_name = "885201314.xyz" }
+]
+
+# KV Namespace — routing config + template metadata
+[[kv_namespaces]]
+binding = "ROMANCESPACE_KV"
+id      = "726287eac5274a80b9df18217d43b0f0"
+
+# R2 Bucket — template files (HTML/CSS/JS/images) + pre-rendered user pages
+[[r2_buckets]]
+binding     = "ROMANCESPACE_R2"
+bucket_name = "romancespace-templates"
+
+# ADMIN_KEY must be set as a Secret in Cloudflare Dashboard:
+# Workers → romancespace → Settings → Variables → Add Secret → ADMIN_KEY
+# DO NOT put the actual key value here.
