@@ -302,7 +302,7 @@ async function handleRequest(request, env, ctx) {
   const response = new Response(html, {
     headers: {
       'Content-Type': 'text/html;charset=UTF-8',
-      'Cache-Control': 'public, max-age=86400, s-maxage=86400', // 24 hours (VPS can purge if needed)
+      'Cache-Control': 'public, max-age=0, s-maxage=86400, must-revalidate', // Force browser to revalidate with Cloudflare
       ...SEC_HEADERS,
     },
   });
