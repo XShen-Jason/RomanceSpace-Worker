@@ -8,6 +8,10 @@ routes = [
   { pattern = "*.moodspace.xyz", zone_name = "moodspace.xyz" }
 ]
 
+[vars]
+BASE_DOMAIN = "moodspace.xyz"
+API_BASE_URL = "https://api.moodspace.xyz"
+
 # KV Namespace — routing config + template metadata
 [[kv_namespaces]]
 binding = "MOODSPACE_KV"

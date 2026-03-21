@@ -65,12 +65,14 @@ function getMime(filename) {
 
 /** 404 — redirect to main platform. */
 /** 404 — redirect to main platform. */
-function notFoundResponse() {
-  return Response.redirect('https://www.moodspace.xyz', 302);
+function notFoundResponse(env) {
+  const baseDomain = env?.BASE_DOMAIN || 'moodspace.xyz';
+  return Response.redirect(`https://www.${baseDomain}`, 302);
 }
 
 /** 500 — graceful error page for infrastructure failures. */
-function serverErrorResponse(detail = '') {
+function serverErrorResponse(env, detail = '') {
+  const baseDomain = env?.BASE_DOMAIN || 'moodspace.xyz';
   const body = `<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -88,7 +90,7 @@ function serverErrorResponse(detail = '') {
 <body>
   <h1>💔 页面暂时无法加载</h1>
   <p>服务器正在努力恢复中，请稍后再试。</p>
-  <p><a href="https://www.moodspace.xyz">← 返回主页</a></p>
+  <p><a href="https://www.${baseDomain}">← 返回主页</a></p>
 </body>
 </html>`;
   return new Response(body, {
@@ -137,7 +139,7 @@ export default {
       return await handleRequest(request, env, ctx);
     } catch (err) {
       console.error('[Worker Fatal]', err?.message ?? err);
-      return serverErrorResponse();
+      return serverErrorResponse(env);
     }
   },
 };
@@ -212,7 +214,7 @@ async function handleRequest(request, env, ctx) {
   const subdomain = host.split('.')[0];
 
   if (!/^[a-zA-Z0-9-]{1,64}$/.test(subdomain)) {
-    return notFoundResponse();
+    return notFoundResponse(env);
   }
 
   // ── Bot filter: protect KV/R2 quota from scrapers ────────────
@@ -238,10 +240,10 @@ async function handleRequest(request, env, ctx) {
   // ── Preview mode: bypass all caches, read R2 directly ─────────
   if (isPreview) {
     const cfgRaw = await env.MOODSPACE_KV.get(subdomain);
-    if (!cfgRaw) return notFoundResponse();
+    if (!cfgRaw) return notFoundResponse(env);
 
     const obj = await fetchPageHtml(env.MOODSPACE_R2, subdomain);
-    if (!obj) return notFoundResponse();
+    if (!obj) return notFoundResponse(env);
 
     return new Response(await obj.text(), {
       headers: {
@@ -261,13 +263,13 @@ async function handleRequest(request, env, ctx) {
   if (cached) return cached;
 
   const cfgRaw = await env.MOODSPACE_KV.get(subdomain);
-  if (!cfgRaw) return notFoundResponse();
+  if (!cfgRaw) return notFoundResponse(env);
 
   let cfg;
-  try { cfg = JSON.parse(cfgRaw); } catch { return notFoundResponse(); }
+  try { cfg = JSON.parse(cfgRaw); } catch { return notFoundResponse(env); }
 
   const obj = await fetchPageHtml(env.MOODSPACE_R2, subdomain);
-  if (!obj) return notFoundResponse();
+  if (!obj) return notFoundResponse(env);
 
   let html = await obj.text();
 
@@ -280,9 +282,11 @@ async function handleRequest(request, env, ctx) {
       const isStale = !html.includes(`<meta name="tmpl-version" content="${tmplMeta.version}">`);
       if (isStale) {
         console.log(`[Worker] Stale page detected for ${subdomain} (want: ${tmplMeta.version}). Triggering lazy re-render.`);
+        
+        const apiBaseUrl = env.API_BASE_URL || 'https://api.moodspace.xyz';
         ctx.waitUntil(
           Promise.race([
-            fetch(`https://api.885201314.xyz/api/project/re-render/${subdomain}`, {
+            fetch(`${apiBaseUrl}/api/project/re-render/${subdomain}`, {
               method: 'POST',
               headers: {
                 'X-Admin-Key': env.ADMIN_KEY ?? '',
